@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29905.134
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AlgebraicExpressions", "AlgebraicExpressions.csproj", "{DD2BF9E7-3085-490F-9AC5-D4059F768A49}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AlgebraicExpressions", "AlgebraicExpressions\AlgebraicExpressions.csproj", "{3789CA35-E650-4C9D-A0E6-B269ABA992BC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +11,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{DD2BF9E7-3085-490F-9AC5-D4059F768A49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DD2BF9E7-3085-490F-9AC5-D4059F768A49}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DD2BF9E7-3085-490F-9AC5-D4059F768A49}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DD2BF9E7-3085-490F-9AC5-D4059F768A49}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3789CA35-E650-4C9D-A0E6-B269ABA992BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3789CA35-E650-4C9D-A0E6-B269ABA992BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3789CA35-E650-4C9D-A0E6-B269ABA992BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3789CA35-E650-4C9D-A0E6-B269ABA992BC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
