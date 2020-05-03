@@ -11,13 +11,42 @@ namespace AlgebraicExpressions
     {
         static void Main(string[] args)
         {
-            var textExpression = " 23/5*45+123-67 -  123+    4 *  22    ";
+            //var textExpression = "2*(1+2)";
+            var textExpression = " (23/(5*((45/123)-67) - ((( 123+    4) *  22))    ))";
             var tokens = GetTokens(textExpression);
-            var expressionsOrder = GetExpressionsOrder(tokens);
-            var res = EvaluateExpressions(tokens, expressionsOrder);
+            var expressionsOrder = GetExpressionsQueue(tokens);
+            var res = new Dictionary<Token, List<Token>>();
+
+            foreach (var expression in expressionsOrder)
+            {
+                var test = GetExecutionQueueByAlgebraicOperations(expression.Value);
+
+                if (test.Count() > 0)
+                {
+                    foreach (var test1 in test.Reverse().Skip(1).Reverse())
+                    {
+                        res.Add(test1.Key, test1.Value);
+                    }
+                }
+
+                var outerExpression = test.LastOrDefault();
+
+                if (outerExpression.Value == null)
+                {
+                    res.Add(expression.Key, expression.Value.Where(token => token.Type == TokenType.Operand).ToList());
+                }
+                else
+                {
+                    res.Add(expression.Key, outerExpression.Value);
+                }
+            }
+
+            var test2 = EvaluateExpressions(tokens, res);
+
+            Console.ReadKey();
         }
 
-        static float EvaluateExpressions(List<Token> tokens, Queue<KeyValuePair<Token, List<Guid>>> expressionsOrder)
+        static float EvaluateExpressions(List<Token> tokens, Dictionary<Token, List<Token>> expressionsOrder)
         {
             var tokensValue = tokens.Where(t => t.Type == TokenType.Operand)
                 .ToDictionary(t => t.Id, t => float.Parse(t.Content));
@@ -25,20 +54,36 @@ namespace AlgebraicExpressions
             var tokensOperatos = tokens.Where(t => t.Type == TokenType.Operator)
                 .ToDictionary(t => t.Id, t => getAlgebraicOperation(t.Content));
 
-            while (expressionsOrder.Any())
+            foreach (var expression in expressionsOrder)
             {
-                var expression = expressionsOrder.Dequeue();
+                float value;
 
                 // Fix it later. Looks like a shit.
-                var leftId = expression.Value[0];
-                var operationId = expression.Value[1];
-                var rightId = expression.Value[2];
+                if (expression.Value.Any(token => token.Type == TokenType.Operator)
+                    && expression.Value.Where(token => token.Type == TokenType.Operand).Count() == 2)
+                {
+                    var leftId = expression.Value.First(token => token.Type == TokenType.Operand).Id;
+                    var operationId = expression.Value.First(token => token.Type == TokenType.Operator).Id;
+                    var rightId = expression.Value.Last(token => token.Type == TokenType.Operand).Id;
 
-                var leftOperand = tokensValue[leftId];
-                var rightOperand = tokensValue[rightId];
-                var operation = tokensOperatos[operationId];
+                    var leftOperand = tokensValue[leftId];
+                    var rightOperand = tokensValue[rightId];
+                    var operation = tokensOperatos[operationId];
 
-                var value = EvaluateAlgebraicExpression(leftOperand, rightOperand, operation);
+                    value = EvaluateAlgebraicExpression(leftOperand, rightOperand, operation);
+                }
+                else if (expression.Value.Where(token => token.Type == TokenType.Operand).Count() == 1)
+                {
+                    var operandId = expression.Value.First(token => token.Type == TokenType.Operand).Id;
+
+                    var operand = tokensValue[operandId];
+
+                    value = operand;
+                }
+                else
+                {
+                    throw new Exception("BLAT");
+                }
 
 #if DEBUG
                 Console.WriteLine($"{expression.Key.Content} -> {value}");
@@ -49,27 +94,118 @@ namespace AlgebraicExpressions
 
             return tokensValue.Last().Value;
         }
-        static Queue<KeyValuePair<Token, List<Guid>>> GetExpressionsOrder(List<Token> tokens)
+
+        static Dictionary<Token, List<Token>> GetExpressionsQueue(List<Token> tokens)
+        {
+            var tokensMap = tokens.Select(t => t.Id).ToList();
+            var shadowTokens = new List<Token>();
+
+            //Refactor later
+            Func<Guid, int> getTokenPositionById = (Guid id) =>
+            {
+                var res = tokensMap.FindIndex(tokenPosition => tokenPosition == id);
+
+                if (res == -1)
+                {
+                    throw new Exception("FUCKING SHIT!");
+                }
+
+                return res;
+            };
+
+            var priorityTokensLevels = new Dictionary<int, List<Guid>>();
+
+            var unclosedBrackets = 0;
+
+            Action<int, Guid> updatePriorityTokensLevels = (int nestingLevel, Guid priorityTokenId) =>
+            {
+                if (priorityTokensLevels.ContainsKey(unclosedBrackets))
+                {
+                    priorityTokensLevels[unclosedBrackets].Add(priorityTokenId);
+                }
+                else
+                {
+                    priorityTokensLevels.Add(unclosedBrackets, new List<Guid> { priorityTokenId });
+                }
+            };
+
+            foreach (var priorityToken in tokens.Where(t => t.Type == TokenType.Priority))
+            {
+                switch (priorityToken.Content)
+                {
+                    case "(":
+                        {
+                            unclosedBrackets++;
+                            updatePriorityTokensLevels(unclosedBrackets, priorityToken.Id);
+                            continue;
+                        }
+                    case ")":
+                        {
+                            updatePriorityTokensLevels(unclosedBrackets, priorityToken.Id);
+                            unclosedBrackets--;
+                            continue;
+                        }
+                }
+            }
+
+            var expressionsQueue = new Dictionary<Token, List<Token>>();
+
+            foreach (var priorityTokensLevel in priorityTokensLevels.OrderByDescending(level => level.Key).ToDictionary(l => l.Key, l => l.Value))
+            {
+                for (var i = 0; i < priorityTokensLevel.Value.Count; i += 2)
+                {
+                    var leftPriorityTokenIndex = getTokenPositionById(priorityTokensLevel.Value[i]);
+                    var rightPriorityTokenIndex = getTokenPositionById(priorityTokensLevel.Value[i + 1]);
+                    var expressionLength = rightPriorityTokenIndex - leftPriorityTokenIndex;
+
+                    if (expressionLength <= 0)
+                    {
+                        throw new Exception("SHIT");
+                    }
+
+                    var tokensIds = tokensMap.GetRange(leftPriorityTokenIndex, expressionLength + 1);
+                    var expressionsInBrackets = tokensIds
+                        .Join(tokens.Concat(shadowTokens), id => id, token => token.Id, (id, token) => token).ToList();
+
+                    var shadowToken = new Token(TokenType.Operand,
+                        new Range(expressionsInBrackets.First().Location.Start, expressionsInBrackets.Last().Location.End),
+                        expressionsInBrackets.Aggregate(string.Empty, (acc, token) => acc + token.Content));
+
+                    tokensMap.RemoveRange(leftPriorityTokenIndex + 1, expressionLength);
+                    tokensMap[leftPriorityTokenIndex] = shadowToken.Id;
+
+                    shadowTokens.Add(shadowToken);
+                    expressionsQueue.Add(shadowToken, expressionsInBrackets);
+                }
+            }
+
+            var expressionsOutBrackets = tokensMap
+                        .Join(tokens.Concat(shadowTokens), id => id, token => token.Id, (id, token) => token).ToList();
+
+            expressionsQueue.Add(new Token(TokenType.Operand,
+                        new Range(expressionsOutBrackets.First().Location.Start, expressionsOutBrackets.Last().Location.End),
+                        expressionsOutBrackets.Aggregate(string.Empty, (acc, token) => acc + token.Content)), expressionsOutBrackets);
+
+            return expressionsQueue;
+        }
+
+        static Dictionary<Token, List<Token>> GetExecutionQueueByAlgebraicOperations(List<Token> tokens)
         {
             var shadowTokens = new List<Token>();
             var operators = new List<string[]>() { new string[] { "*", "/" }, new string[] { "+", "-", } };
             var tokensMap = tokens.Select(t => t.Id).ToList();
-            var expressionsOrder = new Queue<KeyValuePair<Token, List<Guid>>>();
+            var executionOrder = new Dictionary<Token, List<Token>>();
             var hasOperator = false;
             var currentOperatorsGroupIndex = 0;
 
+            //Refactor later
             Func<Guid, Token> getTokenById = (Guid id) =>
             {
-                var res = tokens.FirstOrDefault(t => t.Id == id);
+                var res = tokens.Concat(shadowTokens).FirstOrDefault(t => t.Id == id);
 
                 if (res == null)
                 {
-                    res = shadowTokens.FirstOrDefault(t => t.Id == id);
-
-                    if (res == null)
-                    {
-                        throw new Exception("FUCKING SHIT!");
-                    }
+                    throw new Exception("FUCKING SHIT!");
                 }
 
                 return res;
@@ -92,7 +228,7 @@ namespace AlgebraicExpressions
                         var leftOperand = getTokenById(tokensMap[i - 1]);
                         var rightOperand = getTokenById(tokensMap[i + 1]);
 
-                        if (leftOperand.Type != TokenType.Operand || rightOperand.Type != TokenType.Operand)
+                        if (leftOperand.Type == TokenType.Unknown)
                         {
                             throw new Exception("BLAT");
                         }
@@ -101,10 +237,7 @@ namespace AlgebraicExpressions
                             new Range(leftOperand.Location.Start, rightOperand.Location.End),
                             leftOperand.Content + currentToken.Content + rightOperand.Content);
 
-                        expressionsOrder.Enqueue(new KeyValuePair<Token, List<Guid>>(
-                            shadowToken,
-                            new List<Guid>() { leftOperand.Id, currentToken.Id, rightOperand.Id }
-                        ));
+                        executionOrder.Add(shadowToken, new List<Token>() { leftOperand, currentToken, rightOperand });
 
                         // Try to remove this variable.
                         shadowTokens.Add(shadowToken);
@@ -126,16 +259,18 @@ namespace AlgebraicExpressions
             } while (currentOperatorsGroupIndex < operators.Count);
 
 
-            return expressionsOrder;
+            return executionOrder;
         }
 
         static List<Token> GetTokens(string textExpression)
         {
-            var operandsSymbols = new[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
-            var operatorsSymbols = new[] { '+', '-', '*', '/' };
+            var operandsSymbols = "0123456789".ToCharArray();
+            var operatorsSymbols = "+-*/".ToCharArray();
+            var prioritySymbols = "()".ToCharArray();
 
             Func<char, bool> isOperand = (char symbol) => operandsSymbols.Any(n => n.Equals(symbol));
             Func<char, bool> isOperator = (char symbol) => operatorsSymbols.Any(n => n.Equals(symbol));
+            Func<char, bool> isPriority = (char symbol) => prioritySymbols.Any(n => n.Equals(symbol));
 
             Func<TokenType, Func<char, bool>, int, (int, int, string)> getToken =
                 (TokenType tokenType, Func<char, bool> validator, int index) =>
@@ -158,7 +293,7 @@ namespace AlgebraicExpressions
                   return (start, end, content.ToString());
               };
 
-            var tokes = new List<Token>();
+            var tokens = new List<Token>();
 
             for (int i = 0; i < textExpression.Length; i++)
             {
@@ -168,19 +303,51 @@ namespace AlgebraicExpressions
                     i = endOfToken;
 
                     // ranges start with 1 (not 0 like arrays)
-                    tokes.Add(new Token(TokenType.Operand, new Range(beginningOfToken + 1, endOfToken + 1), tokenContent.ToString()));
+                    tokens.Add(new Token(TokenType.Operand, new Range(beginningOfToken + 1, endOfToken + 1), tokenContent.ToString()));
                 }
                 else if (isOperator(textExpression[i]))
                 {
-                    var (beginningOfToken, endOfToken, tokenContent) = getToken(TokenType.Operator, isOperator, i);
-                    i = endOfToken;
-
                     // ranges start with 1 (not 0 like arrays)
-                    tokes.Add(new Token(TokenType.Operator, new Range(beginningOfToken + 1, endOfToken + 1), tokenContent.ToString()));
+                    tokens.Add(new Token(TokenType.Operator, new Range(i + 1, i + 1), textExpression[i].ToString()));
+                }
+                else if (isPriority(textExpression[i]))
+                {
+                    // ranges start with 1 (not 0 like arrays)
+                    tokens.Add(new Token(TokenType.Priority, new Range(i + 1, i + 1), textExpression[i].ToString()));
                 }
             }
 
-            return tokes;
+            // Add more input validations.
+            if (!ValidatePriorityTokens(tokens))
+            {
+                throw new Exception("SUKA");
+            }
+
+            return tokens;
+        }
+
+        static bool ValidatePriorityTokens(List<Token> tokens)
+        {
+            var unclosedBrackets = 0;
+
+            foreach (var priorityToken in tokens.Where(t => t.Type == TokenType.Priority))
+            {
+                switch (priorityToken.Content)
+                {
+                    case "(":
+                        {
+                            unclosedBrackets++;
+                            continue;
+                        }
+                    case ")":
+                        {
+                            unclosedBrackets--;
+                            continue;
+                        }
+                }
+            }
+
+            return unclosedBrackets == 0;
         }
 
         static float EvaluateAlgebraicExpression(float left, float right, AlgebraicOperation operation)
@@ -230,8 +397,10 @@ namespace AlgebraicExpressions
 
     public enum TokenType
     {
+        Unknown,
         Operand,
-        Operator
+        Operator,
+        Priority
     }
 
     public enum AlgebraicOperation
